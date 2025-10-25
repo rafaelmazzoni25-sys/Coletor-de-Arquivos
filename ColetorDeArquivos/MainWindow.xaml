@@ -133,16 +133,34 @@
                 CornerRadius="10"
                 BorderBrush="#FFCBD3E1"
                 BorderThickness="1">
-            <DockPanel>
-                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,8">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="3*" />
+                    <ColumnDefinition Width="2*" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Row="0"
+                            Grid.ColumnSpan="2"
+                            Orientation="Horizontal"
+                            HorizontalAlignment="Right"
+                            Margin="0,0,0,8">
                     <Button Content="Selecionar tudo"
                             Command="{Binding SelectAllCommand}" />
                     <Button Content="Inverter seleção"
                             Command="{Binding InvertSelectionCommand}" />
+                    <Button Content="Verificar duplicados"
+                            Command="{Binding CheckDuplicatesCommand}" />
                     <Button Content="Limpar resultados"
                             Command="{Binding ClearResultsCommand}" />
                 </StackPanel>
-                <DataGrid ItemsSource="{Binding Hits}"
+
+                <DataGrid Grid.Row="1"
+                          Grid.Column="0"
+                          ItemsSource="{Binding Hits}"
                           AutoGenerateColumns="False"
                           CanUserAddRows="False"
                           CanUserDeleteRows="False"
@@ -161,7 +179,8 @@
                         <DataGridTemplateColumn Header="✔" Width="50">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Center" />
+                                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              HorizontalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
@@ -183,7 +202,103 @@
                         <DataGridTextColumn Binding="{Binding LastModifiedDisplay}" Header="Modificado" Width="150" IsReadOnly="True" />
                     </DataGrid.Columns>
                 </DataGrid>
-            </DockPanel>
+
+                <Border Grid.Row="1"
+                        Grid.Column="1"
+                        Margin="12,0,0,0"
+                        Background="#FFF8FAFD"
+                        Padding="8"
+                        CornerRadius="8"
+                        BorderBrush="#FFCBD3E1"
+                        BorderThickness="1">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Text="Duplicados"
+                                   FontWeight="Bold"
+                                   FontSize="14"
+                                   Margin="0,0,0,8" />
+
+                        <TextBlock Grid.Row="1"
+                                   Text="Nenhum arquivo duplicado listado."
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Foreground="#FF7A869A">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding DuplicateGroups.Count}" Value="0">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+
+                        <ListBox Grid.Row="1"
+                                 ItemsSource="{Binding DuplicateGroups}"
+                                 BorderThickness="0"
+                                 Background="Transparent"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 Margin="0">
+                            <ListBox.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <VirtualizingStackPanel />
+                                </ItemsPanelTemplate>
+                            </ListBox.ItemsPanel>
+                            <ListBox.Style>
+                                <Style TargetType="ListBox">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Path=Items.Count, RelativeSource={RelativeSource Self}}" Value="0">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ListBox.Style>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,0,0,8"
+                                            Padding="8"
+                                            Background="White"
+                                            CornerRadius="6"
+                                            BorderBrush="#FFCBD3E1"
+                                            BorderThickness="1">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Description}"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="#FF2D3E50" />
+                                            <TextBlock Text="{Binding SizeDisplay, StringFormat=Tamanho: {0}}"
+                                                       Foreground="#FF4A5568"
+                                                       FontSize="12"
+                                                       Margin="0,2,0,6" />
+                                            <ItemsControl ItemsSource="{Binding Occurrences}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel Margin="0,0,0,6">
+                                                            <TextBlock Text="{Binding RootPath}"
+                                                                       FontWeight="Bold"
+                                                                       Foreground="#FF2D3E50" />
+                                                            <TextBlock Text="{Binding FullPath}"
+                                                                       TextWrapping="Wrap"
+                                                                       Foreground="#FF4A5568"
+                                                                       FontSize="12" />
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+                </Border>
+            </Grid>
         </Border>
 
         <Border Grid.Row="2"

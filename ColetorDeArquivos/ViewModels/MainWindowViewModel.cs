@@ -55,6 +55,7 @@ public class MainWindowViewModel : ViewModelBase
         CancelCopyCommand = new RelayCommand(_ => CancelCopy(), _ => IsCopying);
         SelectAllCommand = new RelayCommand(_ => SelectAll(), _ => CanSelectRows && !IsBusy);
         InvertSelectionCommand = new RelayCommand(_ => InvertSelection(), _ => CanSelectRows && !IsBusy);
+        CheckDuplicatesCommand = new RelayCommand(_ => CheckDuplicates(), _ => Hits.Any() && !IsBusy);
         ClearResultsCommand = new RelayCommand(_ => ClearResults(), _ => CanClearResults);
 
         LoadPreferences();
@@ -66,6 +67,8 @@ public class MainWindowViewModel : ViewModelBase
     public ObservableCollection<SearchHit> Hits { get; } = new();
 
     public ObservableCollection<LogEntry> LogEntries { get; } = new();
+
+    public ObservableCollection<DuplicateGroup> DuplicateGroups { get; } = new();
 
     public RelayCommand AddRootCommand { get; }
 
@@ -88,6 +91,8 @@ public class MainWindowViewModel : ViewModelBase
     public RelayCommand SelectAllCommand { get; }
 
     public RelayCommand InvertSelectionCommand { get; }
+
+    public RelayCommand CheckDuplicatesCommand { get; }
 
     public RelayCommand ClearResultsCommand { get; }
 
@@ -484,6 +489,7 @@ public class MainWindowViewModel : ViewModelBase
 
         Hits.Clear();
         _hitsBySignature.Clear();
+        DuplicateGroups.Clear();
     }
 
     private void AddLog(string message, LogLevel? levelOverride = null)
@@ -521,6 +527,7 @@ public class MainWindowViewModel : ViewModelBase
         if (e.Action == NotifyCollectionChangedAction.Reset)
         {
             _hitsBySignature.Clear();
+            DuplicateGroups.Clear();
             RefreshState();
             return;
         }
@@ -574,7 +581,55 @@ public class MainWindowViewModel : ViewModelBase
         CancelCopyCommand.RaiseCanExecuteChanged();
         SelectAllCommand.RaiseCanExecuteChanged();
         InvertSelectionCommand.RaiseCanExecuteChanged();
+        CheckDuplicatesCommand.RaiseCanExecuteChanged();
         ClearResultsCommand.RaiseCanExecuteChanged();
+    }
+
+    private void CheckDuplicates()
+    {
+        if (Hits.Count == 0)
+        {
+            AddLog("Nenhum arquivo listado para verificar duplicados.");
+            return;
+        }
+
+        _hitsBySignature.Clear();
+
+        foreach (var hit in Hits)
+        {
+            hit.IsDuplicate = false;
+        }
+
+        foreach (var hit in Hits)
+        {
+            var signature = FileSignature.FromHit(hit);
+            if (!_hitsBySignature.TryGetValue(signature, out var list))
+            {
+                list = new List<SearchHit>();
+                _hitsBySignature[signature] = list;
+            }
+
+            list.Add(hit);
+        }
+
+        var duplicateGroups = _hitsBySignature.Values.Where(list => list.Count > 1).ToList();
+
+        if (duplicateGroups.Count == 0)
+        {
+            DuplicateGroups.Clear();
+            AddLog("Nenhum arquivo duplicado encontrado entre os resultados.");
+            return;
+        }
+
+        foreach (var group in duplicateGroups)
+        {
+            UpdateDuplicateFlags(group);
+            var roots = string.Join(", ", group.Select(hit => $"'{hit.RootPath}'"));
+            AddLog($"[AVISO] Arquivo duplicado detectado: {group[0].FileName} em {roots}", LogLevel.Warning);
+        }
+
+        AddLog($"{duplicateGroups.Count} conjunto(s) de arquivos duplicados identificado(s).", LogLevel.Warning);
+        RebuildDuplicateGroups();
     }
 
     private void RegisterHit(SearchHit hit)
@@ -595,6 +650,7 @@ public class MainWindowViewModel : ViewModelBase
         }
 
         UpdateDuplicateFlags(list);
+        RebuildDuplicateGroups();
     }
 
     private void UnregisterHit(SearchHit hit)
@@ -612,10 +668,12 @@ public class MainWindowViewModel : ViewModelBase
         if (list.Count == 0)
         {
             _hitsBySignature.Remove(key);
+            RebuildDuplicateGroups();
             return;
         }
 
         UpdateDuplicateFlags(list);
+        RebuildDuplicateGroups();
     }
 
     private static void UpdateDuplicateFlags(List<SearchHit> hits)
@@ -624,6 +682,23 @@ public class MainWindowViewModel : ViewModelBase
         foreach (var item in hits)
         {
             item.IsDuplicate = isDuplicate;
+        }
+    }
+
+    private void RebuildDuplicateGroups()
+    {
+        var groups = _hitsBySignature
+            .Values
+            .Where(list => list.Count > 1)
+            .Select(list => new DuplicateGroup(list))
+            .OrderBy(group => group.FileName, StringComparer.CurrentCultureIgnoreCase)
+            .ThenByDescending(group => group.Count)
+            .ToList();
+
+        DuplicateGroups.Clear();
+        foreach (var group in groups)
+        {
+            DuplicateGroups.Add(group);
         }
     }
 
