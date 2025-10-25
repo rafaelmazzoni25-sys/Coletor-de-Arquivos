@@ -143,8 +143,16 @@
                     <ColumnDefinition Width="2*" />
                 </Grid.ColumnDefinitions>
 
+                <TextBlock Grid.Row="0"
+                           Grid.Column="0"
+                           Text="{Binding TotalHitsSummary}"
+                           VerticalAlignment="Center"
+                           Margin="0,0,12,8"
+                           Foreground="#FF2D3E50"
+                           FontWeight="SemiBold" />
+
                 <StackPanel Grid.Row="0"
-                            Grid.ColumnSpan="2"
+                            Grid.Column="1"
                             Orientation="Horizontal"
                             HorizontalAlignment="Right"
                             Margin="0,0,0,8">
