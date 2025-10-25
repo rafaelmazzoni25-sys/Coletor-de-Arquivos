@@ -16,7 +16,7 @@ public class FileCollector
         var normalizedRoots = NormalizeRoots(rootPaths);
         if (normalizedRoots.Count == 0 || extensions.Count == 0)
         {
-            return AsyncEnumerable.Empty<SearchHit>();
+            return EmptyAsync();
         }
 
         var channel = Channel.CreateUnbounded<SearchHit>(new UnboundedChannelOptions
@@ -124,5 +124,11 @@ public class FileCollector
         }
 
         return normalized;
+    }
+
+    private static async IAsyncEnumerable<SearchHit> EmptyAsync()
+    {
+        await Task.CompletedTask;
+        yield break;
     }
 }
