@@ -200,6 +200,14 @@ public class MainWindowViewModel : ViewModelBase
 
     public bool CanClearResults => Hits.Any() && !IsBusy;
 
+    public long TotalHitsSize => Hits.Sum(hit => hit.Size);
+
+    public string TotalHitsSizeDisplay => FormatBytes(TotalHitsSize);
+
+    public string TotalHitsSummary => Hits.Count == 0
+        ? "Nenhum arquivo listado."
+        : $"Total listado: {TotalHitsSizeDisplay} em {Hits.Count} arquivo(s).";
+
     public bool CanStartSearch => CanEditSearchParameters && Roots.Count > 0 && ParseExtensions(ExtensionsText).Count > 0;
 
     private void LoadPreferences()
@@ -490,6 +498,7 @@ public class MainWindowViewModel : ViewModelBase
         Hits.Clear();
         _hitsBySignature.Clear();
         DuplicateGroups.Clear();
+        NotifyTotalSizeChanged();
     }
 
     private void AddLog(string message, LogLevel? levelOverride = null)
@@ -529,6 +538,7 @@ public class MainWindowViewModel : ViewModelBase
             _hitsBySignature.Clear();
             DuplicateGroups.Clear();
             RefreshState();
+            NotifyTotalSizeChanged();
             return;
         }
 
@@ -551,6 +561,7 @@ public class MainWindowViewModel : ViewModelBase
         }
 
         RefreshState();
+        NotifyTotalSizeChanged();
     }
 
     private void OnHitPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -700,6 +711,28 @@ public class MainWindowViewModel : ViewModelBase
         {
             DuplicateGroups.Add(group);
         }
+    }
+
+    private void NotifyTotalSizeChanged()
+    {
+        OnPropertyChanged(nameof(TotalHitsSize));
+        OnPropertyChanged(nameof(TotalHitsSizeDisplay));
+        OnPropertyChanged(nameof(TotalHitsSummary));
+    }
+
+    private static string FormatBytes(long size)
+    {
+        string[] units = { "B", "KB", "MB", "GB", "TB" };
+        double formatted = size;
+        int unitIndex = 0;
+
+        while (formatted >= 1024 && unitIndex < units.Length - 1)
+        {
+            formatted /= 1024;
+            unitIndex++;
+        }
+
+        return $"{formatted:0.##} {units[unitIndex]}";
     }
 
     private static List<string> ParseExtensions(string input)
