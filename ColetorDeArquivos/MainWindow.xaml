@@ -6,6 +6,20 @@
         Width="1150"
         Background="#FFEEF2F7"
         WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <Style TargetType="ListBoxItem" x:Key="LogItemStyle">
+            <Setter Property="Foreground" Value="#FFB6C6E3" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Level}" Value="Warning">
+                    <Setter Property="Foreground" Value="#FFF2C744" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Level}" Value="Error">
+                    <Setter Property="Foreground" Value="#FFFF6B6B" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -41,16 +55,14 @@
                         <StackPanel Grid.Column="1" Orientation="Vertical" VerticalAlignment="Stretch">
                             <Button Content="Adicionar..."
                                     Width="120"
-                                    Click="OnAddRoot"
-                                    IsEnabled="{Binding CanEditSearchParameters}" />
+                                    Command="{Binding AddRootCommand}" />
                             <Button Content="Remover selecionadas"
                                     Width="120"
-                                    Click="OnRemoveRoot"
-                                    IsEnabled="{Binding CanEditSearchParameters}" />
+                                    Command="{Binding RemoveRootsCommand}"
+                                    CommandParameter="{Binding SelectedItems, ElementName=RootsListBox}" />
                             <Button Content="Limpar"
                                     Width="120"
-                                    Click="OnClearRoots"
-                                    IsEnabled="{Binding CanEditSearchParameters}" />
+                                    Command="{Binding ClearRootsCommand}" />
                         </StackPanel>
                     </Grid>
                 </GroupBox>
@@ -67,8 +79,7 @@
                                      IsEnabled="{Binding CanEditSearchParameters}" />
                             <Button Content="Selecionar..."
                                     DockPanel.Dock="Right"
-                                    Click="OnChooseDestination"
-                                    IsEnabled="{Binding CanEditSearchParameters}" />
+                                    Command="{Binding ChooseDestinationCommand}" />
                         </DockPanel>
                     </GroupBox>
 
@@ -89,23 +100,18 @@
 
                     <StackPanel Orientation="Horizontal" Margin="0,16,0,0" HorizontalAlignment="Right">
                         <Button Content="Iniciar busca"
-                                Click="OnStartSearch"
-                                IsEnabled="{Binding CanStartSearch}" />
+                                Command="{Binding StartSearchCommand}" />
                         <Button Content="Cancelar busca"
-                                Click="OnCancelSearch"
-                                IsEnabled="{Binding IsSearching}" />
+                                Command="{Binding CancelSearchCommand}" />
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal" Margin="0,12,0,0" HorizontalAlignment="Right">
                         <Button Content="Copiar selecionados"
-                                Click="OnCopySelected"
-                                IsEnabled="{Binding CanCopySelected}" />
+                                Command="{Binding CopySelectedCommand}" />
                         <Button Content="Copiar todos"
-                                Click="OnCopyAll"
-                                IsEnabled="{Binding CanCopyAll}" />
+                                Command="{Binding CopyAllCommand}" />
                         <Button Content="Cancelar cópia"
-                                Click="OnCancelCopy"
-                                IsEnabled="{Binding IsCopying}" />
+                                Command="{Binding CancelCopyCommand}" />
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,16,0,0">
@@ -113,7 +119,7 @@
                                      Height="12"
                                      Margin="4"
                                      IsIndeterminate="True"
-                                     Visibility="{Binding BusyVisibility}" />
+                                     Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
                         <TextBlock Text="{Binding StatusText}" Margin="10,0" VerticalAlignment="Center" />
                     </StackPanel>
                 </StackPanel>
@@ -130,14 +136,11 @@
             <DockPanel>
                 <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,8">
                     <Button Content="Selecionar tudo"
-                            Click="OnSelectAll"
-                            IsEnabled="{Binding CanSelectRows}" />
+                            Command="{Binding SelectAllCommand}" />
                     <Button Content="Inverter seleção"
-                            Click="OnInvertSelection"
-                            IsEnabled="{Binding CanSelectRows}" />
+                            Command="{Binding InvertSelectionCommand}" />
                     <Button Content="Limpar resultados"
-                            Click="OnClearResults"
-                            IsEnabled="{Binding CanClearResults}" />
+                            Command="{Binding ClearResultsCommand}" />
                 </StackPanel>
                 <DataGrid ItemsSource="{Binding Hits}"
                           AutoGenerateColumns="False"
@@ -149,9 +152,19 @@
                           SelectionUnit="FullRow"
                           Margin="0"
                           RowBackground="#FFF8FAFD"
-                          AlternatingRowBackground="#FFEFF3F8">
+                          AlternatingRowBackground="#FFEFF3F8"
+                          EnableRowVirtualization="True"
+                          VirtualizingPanel.IsVirtualizing="True"
+                          VirtualizingPanel.VirtualizationMode="Recycling"
+                          ScrollViewer.IsDeferredScrollingEnabled="True">
                     <DataGrid.Columns>
-                        <DataGridCheckBoxColumn Binding="{Binding IsSelected, Mode=TwoWay}" Header="✔" Width="40" IsReadOnly="False" />
+                        <DataGridTemplateColumn Header="✔" Width="50">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                         <DataGridTextColumn Binding="{Binding FileName}" Header="Arquivo" Width="200" IsReadOnly="True" />
                         <DataGridTextColumn Binding="{Binding RootPath}" Header="Raiz" Width="150" IsReadOnly="True" />
                         <DataGridTextColumn Binding="{Binding FullPath}" Header="Caminho completo" Width="*" IsReadOnly="True" />
@@ -171,20 +184,24 @@
                 BorderThickness="1">
             <DockPanel>
                 <TextBlock Text="Log de atividades" FontWeight="Bold" Margin="0,0,0,6" />
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <TextBox Text="{Binding LogText}"
-                             FontFamily="Consolas"
-                             FontSize="12"
-                             Background="#FF101521"
-                             Foreground="#FFB6C6E3"
-                             IsReadOnly="True"
-                             TextChanged="OnLogTextChanged"
-                             AcceptsReturn="True"
-                             VerticalScrollBarVisibility="Hidden"
-                             BorderThickness="0"
-                             Margin="0"
-                             Padding="8" />
-                </ScrollViewer>
+                <ListBox ItemsSource="{Binding LogEntries}"
+                         Background="#FF101521"
+                         Foreground="#FFB6C6E3"
+                         BorderThickness="0"
+                         FontFamily="Consolas"
+                         FontSize="12"
+                         Margin="0"
+                         Padding="4"
+                         ItemContainerStyle="{StaticResource LogItemStyle}"
+                         VirtualizingPanel.IsVirtualizing="True"
+                         VirtualizingPanel.VirtualizationMode="Recycling"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding FormattedMessage}" />
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
             </DockPanel>
         </Border>
     </Grid>

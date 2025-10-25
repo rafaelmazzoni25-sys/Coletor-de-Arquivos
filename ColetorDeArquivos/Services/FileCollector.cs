@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using ColetorDeArquivos.Models;
 
@@ -10,70 +11,92 @@ namespace ColetorDeArquivos.Services;
 
 public class FileCollector
 {
-    public async Task CollectAsync(IEnumerable<string> rootPaths, IReadOnlyCollection<string> extensions, bool followSymlinks, IProgress<SearchHit>? hitProgress, IProgress<string>? logProgress, CancellationToken cancellationToken)
+    public IAsyncEnumerable<SearchHit> CollectAsync(IEnumerable<string> rootPaths, IReadOnlyCollection<string> extensions, bool followSymlinks, IProgress<string>? logProgress, CancellationToken cancellationToken)
     {
         var normalizedRoots = NormalizeRoots(rootPaths);
-        if (normalizedRoots.Count == 0)
+        if (normalizedRoots.Count == 0 || extensions.Count == 0)
         {
-            return;
+            return AsyncEnumerable.Empty<SearchHit>();
         }
 
-        await Task.Run(() =>
+        var channel = Channel.CreateUnbounded<SearchHit>(new UnboundedChannelOptions
         {
-            var extSet = new HashSet<string>(extensions.Select(e => e.ToLowerInvariant()));
-            var options = new EnumerationOptions
-            {
-                RecurseSubdirectories = true,
-                IgnoreInaccessible = true,
-                AttributesToSkip = followSymlinks ? FileAttributes.None : FileAttributes.ReparsePoint
-            };
+            SingleReader = true,
+            SingleWriter = true
+        });
 
-            int count = 0;
-            foreach (var root in normalizedRoots)
+        _ = Task.Run(() =>
+        {
+            try
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                logProgress?.Report($"Procurando em: {root}");
-
-                try
+                var extSet = new HashSet<string>(extensions.Select(e => e.ToLowerInvariant()));
+                var options = new EnumerationOptions
                 {
-                    foreach (var file in Directory.EnumerateFiles(root, "*", options))
-                    {
-                        cancellationToken.ThrowIfCancellationRequested();
-                        try
-                        {
-                            var extension = Path.GetExtension(file).ToLowerInvariant();
-                            if (!extSet.Contains(extension))
-                            {
-                                continue;
-                            }
+                    RecurseSubdirectories = true,
+                    IgnoreInaccessible = true,
+                    AttributesToSkip = followSymlinks ? FileAttributes.None : FileAttributes.ReparsePoint
+                };
 
-                            var info = new FileInfo(file);
-                            var hit = new SearchHit(info.FullName, root, info.Length, info.LastWriteTime);
-                            hitProgress?.Report(hit);
-                            count++;
-                        }
-                        catch (UnauthorizedAccessException)
+                int count = 0;
+                foreach (var root in normalizedRoots)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    logProgress?.Report($"Procurando em: {root}");
+
+                    try
+                    {
+                        foreach (var file in Directory.EnumerateFiles(root, "*", options))
                         {
-                            logProgress?.Report($"[ERRO - permissão] {file}");
-                        }
-                        catch (IOException ex)
-                        {
-                            logProgress?.Report($"[ERRO - IO] {file}: {ex.Message}");
+                            cancellationToken.ThrowIfCancellationRequested();
+                            try
+                            {
+                                var extension = Path.GetExtension(file).ToLowerInvariant();
+                                if (!extSet.Contains(extension))
+                                {
+                                    continue;
+                                }
+
+                                var info = new FileInfo(file);
+                                var hit = new SearchHit(info.FullName, root, info.Length, info.LastWriteTime);
+                                channel.Writer.TryWrite(hit);
+                                count++;
+                            }
+                            catch (UnauthorizedAccessException)
+                            {
+                                logProgress?.Report($"[ERRO - permissão] {file}");
+                            }
+                            catch (IOException ex)
+                            {
+                                logProgress?.Report($"[ERRO - IO] {file}: {ex.Message}");
+                            }
                         }
                     }
+                    catch (UnauthorizedAccessException)
+                    {
+                        logProgress?.Report($"[ERRO - permissão] ao acessar {root}");
+                    }
+                    catch (IOException ex)
+                    {
+                        logProgress?.Report($"[ERRO - IO] ao acessar {root}: {ex.Message}");
+                    }
                 }
-                catch (UnauthorizedAccessException)
-                {
-                    logProgress?.Report($"[ERRO - permissão] ao acessar {root}");
-                }
-                catch (IOException ex)
-                {
-                    logProgress?.Report($"[ERRO - IO] ao acessar {root}: {ex.Message}");
-                }
-            }
 
-            logProgress?.Report($"Busca finalizada. Encontrados: {count}");
-        }, cancellationToken);
+                logProgress?.Report($"Busca finalizada. Encontrados: {count}");
+                channel.Writer.TryComplete();
+            }
+            catch (OperationCanceledException ex)
+            {
+                logProgress?.Report("Busca cancelada pelo usuário.");
+                channel.Writer.TryComplete(ex);
+            }
+            catch (Exception ex)
+            {
+                logProgress?.Report($"[ERRO] Falha na busca: {ex.Message}");
+                channel.Writer.TryComplete(ex);
+            }
+        }, CancellationToken.None);
+
+        return channel.Reader.ReadAllAsync(cancellationToken);
     }
 
     private static List<string> NormalizeRoots(IEnumerable<string> rootPaths)
