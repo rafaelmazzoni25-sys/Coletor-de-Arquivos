@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel;
 using System.IO;
+using ColetorDeArquivos.Utilities;
 
 namespace ColetorDeArquivos.Models;
 
@@ -38,22 +39,8 @@ public class SearchHit : INotifyPropertyChanged
     public long Size { get; }
     public DateTime LastModified { get; }
 
-    public string SizeDisplay => FormatBytes(Size);
+    public string SizeDisplay => SizeFormatter.FormatBytes(Size);
     public string LastModifiedDisplay => LastModified.ToString("dd/MM/yyyy HH:mm");
-
-    private static string FormatBytes(long size)
-    {
-        string[] units = { "B", "KB", "MB", "GB", "TB" };
-        double formatted = size;
-        int unitIndex = 0;
-        while (formatted >= 1024 && unitIndex < units.Length - 1)
-        {
-            formatted /= 1024;
-            unitIndex++;
-        }
-
-        return $"{formatted:0.##} {units[unitIndex]}";
-    }
 
     private void SetFlag(ref bool field, bool value, string propertyName)
     {

@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using ColetorDeArquivos.Models;
 using ColetorDeArquivos.Properties;
 using ColetorDeArquivos.Services;
+using ColetorDeArquivos.Utilities;
 
 namespace ColetorDeArquivos.ViewModels;
 
@@ -202,11 +203,22 @@ public class MainWindowViewModel : ViewModelBase
 
     public long TotalHitsSize => Hits.Sum(hit => hit.Size);
 
-    public string TotalHitsSizeDisplay => FormatBytes(TotalHitsSize);
+    public string TotalHitsSizeDisplay => SizeFormatter.FormatBytes(TotalHitsSize);
 
-    public string TotalHitsSummary => Hits.Count == 0
-        ? "Nenhum arquivo listado."
-        : $"Total listado: {TotalHitsSizeDisplay} em {Hits.Count} arquivo(s).";
+    public string TotalHitsSummary
+    {
+        get
+        {
+            var count = Hits.Count;
+            if (count == 0)
+            {
+                return "Nenhum arquivo listado.";
+            }
+
+            var suffix = count == 1 ? "arquivo" : "arquivos";
+            return $"Total listado: {TotalHitsSizeDisplay} em {count} {suffix}.";
+        }
+    }
 
     public bool CanStartSearch => CanEditSearchParameters && Roots.Count > 0 && ParseExtensions(ExtensionsText).Count > 0;
 
@@ -718,21 +730,6 @@ public class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(TotalHitsSize));
         OnPropertyChanged(nameof(TotalHitsSizeDisplay));
         OnPropertyChanged(nameof(TotalHitsSummary));
-    }
-
-    private static string FormatBytes(long size)
-    {
-        string[] units = { "B", "KB", "MB", "GB", "TB" };
-        double formatted = size;
-        int unitIndex = 0;
-
-        while (formatted >= 1024 && unitIndex < units.Length - 1)
-        {
-            formatted /= 1024;
-            unitIndex++;
-        }
-
-        return $"{formatted:0.##} {units[unitIndex]}";
     }
 
     private static List<string> ParseExtensions(string input)
