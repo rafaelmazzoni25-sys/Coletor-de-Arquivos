@@ -7,6 +7,7 @@ namespace ColetorDeArquivos.Models;
 public class SearchHit : INotifyPropertyChanged
 {
     private bool _isSelected;
+    private bool _isDuplicate;
 
     public SearchHit(string fullPath, string rootPath, long size, DateTime lastModified)
     {
@@ -22,14 +23,13 @@ public class SearchHit : INotifyPropertyChanged
     public bool IsSelected
     {
         get => _isSelected;
-        set
-        {
-            if (_isSelected != value)
-            {
-                _isSelected = value;
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsSelected)));
-            }
-        }
+        set => SetFlag(ref _isSelected, value, nameof(IsSelected));
+    }
+
+    public bool IsDuplicate
+    {
+        get => _isDuplicate;
+        internal set => SetFlag(ref _isDuplicate, value, nameof(IsDuplicate));
     }
 
     public string FileName { get; }
@@ -53,5 +53,16 @@ public class SearchHit : INotifyPropertyChanged
         }
 
         return $"{formatted:0.##} {units[unitIndex]}";
+    }
+
+    private void SetFlag(ref bool field, bool value, string propertyName)
+    {
+        if (field == value)
+        {
+            return;
+        }
+
+        field = value;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }

@@ -20,6 +20,7 @@ public class MainWindowViewModel : ViewModelBase
     private readonly IDialogService _dialogService;
     private readonly FileCollector _collector;
     private readonly FileCopyService _copyService;
+    private readonly Dictionary<FileSignature, List<SearchHit>> _hitsBySignature = new();
 
     private CancellationTokenSource? _searchCts;
     private CancellationTokenSource? _copyCts;
@@ -478,9 +479,11 @@ public class MainWindowViewModel : ViewModelBase
         foreach (var hit in Hits)
         {
             hit.PropertyChanged -= OnHitPropertyChanged;
+            hit.IsDuplicate = false;
         }
 
         Hits.Clear();
+        _hitsBySignature.Clear();
     }
 
     private void AddLog(string message, LogLevel? levelOverride = null)
@@ -515,11 +518,19 @@ public class MainWindowViewModel : ViewModelBase
 
     private void OnHitsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        if (e.Action == NotifyCollectionChangedAction.Reset)
+        {
+            _hitsBySignature.Clear();
+            RefreshState();
+            return;
+        }
+
         if (e.NewItems != null)
         {
             foreach (var hit in e.NewItems.OfType<SearchHit>())
             {
                 hit.PropertyChanged += OnHitPropertyChanged;
+                RegisterHit(hit);
             }
         }
 
@@ -528,6 +539,7 @@ public class MainWindowViewModel : ViewModelBase
             foreach (var hit in e.OldItems.OfType<SearchHit>())
             {
                 hit.PropertyChanged -= OnHitPropertyChanged;
+                UnregisterHit(hit);
             }
         }
 
@@ -565,6 +577,56 @@ public class MainWindowViewModel : ViewModelBase
         ClearResultsCommand.RaiseCanExecuteChanged();
     }
 
+    private void RegisterHit(SearchHit hit)
+    {
+        var key = FileSignature.FromHit(hit);
+        if (!_hitsBySignature.TryGetValue(key, out var list))
+        {
+            list = new List<SearchHit>();
+            _hitsBySignature[key] = list;
+        }
+
+        list.Add(hit);
+        var hasDuplicate = list.Count > 1;
+        if (hasDuplicate && list.Count == 2)
+        {
+            var other = list.FirstOrDefault(existing => !ReferenceEquals(existing, hit)) ?? list[0];
+            AddLog($"[AVISO] Arquivo duplicado detectado: {hit.FileName} em '{other.RootPath}' e '{hit.RootPath}'", LogLevel.Warning);
+        }
+
+        UpdateDuplicateFlags(list);
+    }
+
+    private void UnregisterHit(SearchHit hit)
+    {
+        var key = FileSignature.FromHit(hit);
+        if (!_hitsBySignature.TryGetValue(key, out var list))
+        {
+            hit.IsDuplicate = false;
+            return;
+        }
+
+        list.Remove(hit);
+        hit.IsDuplicate = false;
+
+        if (list.Count == 0)
+        {
+            _hitsBySignature.Remove(key);
+            return;
+        }
+
+        UpdateDuplicateFlags(list);
+    }
+
+    private static void UpdateDuplicateFlags(List<SearchHit> hits)
+    {
+        var isDuplicate = hits.Count > 1;
+        foreach (var item in hits)
+        {
+            item.IsDuplicate = isDuplicate;
+        }
+    }
+
     private static List<string> ParseExtensions(string input)
     {
         var parts = input
@@ -588,6 +650,39 @@ public class MainWindowViewModel : ViewModelBase
         catch
         {
             return path;
+        }
+    }
+
+    private readonly struct FileSignature : IEquatable<FileSignature>
+    {
+        private readonly string _fileName;
+
+        private FileSignature(string fileName, long size)
+        {
+            _fileName = fileName;
+            Size = size;
+        }
+
+        public long Size { get; }
+
+        public static FileSignature FromHit(SearchHit hit)
+        {
+            return new FileSignature(hit.FileName.ToLowerInvariant(), hit.Size);
+        }
+
+        public bool Equals(FileSignature other)
+        {
+            return Size == other.Size && string.Equals(_fileName, other._fileName, StringComparison.Ordinal);
+        }
+
+        public override bool Equals(object? obj)
+        {
+            return obj is FileSignature other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(_fileName, Size);
         }
     }
 }
