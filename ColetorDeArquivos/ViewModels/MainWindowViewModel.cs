@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using ColetorDeArquivos.Models;
 using ColetorDeArquivos.Properties;
 using ColetorDeArquivos.Services;
+using ColetorDeArquivos.Utilities;
 
 namespace ColetorDeArquivos.ViewModels;
 
@@ -199,6 +200,25 @@ public class MainWindowViewModel : ViewModelBase
     public bool CanSelectRows => Hits.Any();
 
     public bool CanClearResults => Hits.Any() && !IsBusy;
+
+    public long TotalHitsSize => Hits.Sum(hit => hit.Size);
+
+    public string TotalHitsSizeDisplay => SizeFormatter.FormatBytes(TotalHitsSize);
+
+    public string TotalHitsSummary
+    {
+        get
+        {
+            var count = Hits.Count;
+            if (count == 0)
+            {
+                return "Nenhum arquivo listado.";
+            }
+
+            var suffix = count == 1 ? "arquivo" : "arquivos";
+            return $"Total listado: {TotalHitsSizeDisplay} em {count} {suffix}.";
+        }
+    }
 
     public bool CanStartSearch => CanEditSearchParameters && Roots.Count > 0 && ParseExtensions(ExtensionsText).Count > 0;
 
@@ -490,6 +510,7 @@ public class MainWindowViewModel : ViewModelBase
         Hits.Clear();
         _hitsBySignature.Clear();
         DuplicateGroups.Clear();
+        NotifyTotalSizeChanged();
     }
 
     private void AddLog(string message, LogLevel? levelOverride = null)
@@ -529,6 +550,7 @@ public class MainWindowViewModel : ViewModelBase
             _hitsBySignature.Clear();
             DuplicateGroups.Clear();
             RefreshState();
+            NotifyTotalSizeChanged();
             return;
         }
 
@@ -551,6 +573,7 @@ public class MainWindowViewModel : ViewModelBase
         }
 
         RefreshState();
+        NotifyTotalSizeChanged();
     }
 
     private void OnHitPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -700,6 +723,13 @@ public class MainWindowViewModel : ViewModelBase
         {
             DuplicateGroups.Add(group);
         }
+    }
+
+    private void NotifyTotalSizeChanged()
+    {
+        OnPropertyChanged(nameof(TotalHitsSize));
+        OnPropertyChanged(nameof(TotalHitsSizeDisplay));
+        OnPropertyChanged(nameof(TotalHitsSummary));
     }
 
     private static List<string> ParseExtensions(string input)
